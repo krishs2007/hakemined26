@@ -61,6 +61,16 @@ uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 
 Endpoints: POST /run-pipeline, GET /predictions, GET /predictions/{container_id}, GET /dashboard, GET /health
 
+## Run the Website
+
+```bash
+python webapp.py
+```
+
+Open [http://localhost:5000](http://localhost:5000) in your browser.  
+Click **Run Pipeline** to process all containers.  
+Results are displayed live — stats cards, colour-coded table, and a 6-panel dashboard PNG.
+
 ## Risk Levels
 
 | Score Range | Level | Action |

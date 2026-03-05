@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartContainer Risk Engine</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- ── Navbar ──────────────────────────────────────────────────────────────── -->
+<nav class="navbar">
+  <div class="navbar-brand">
+    🚢 SmartContainer Risk Engine
+    <span class="version-badge">v1.0.0</span>
+  </div>
+  <div style="display:flex;gap:10px">
+    <button class="btn btn-secondary btn-sm" onclick="loadStats();loadPredictions()">⟳ Refresh</button>
+  </div>
+</nav>
+
+<!-- ── Main Content ────────────────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-text">
+      <h1>AI-Powered Container Risk Scoring</h1>
+      <p>Random Forest + Isolation Forest + Rule-Based Flags → 0–100 Risk Score per Container</p>
+      <p style="margin-top:8px;font-size:.85rem;opacity:.65">
+        Loads data → Engineers 26 features → Trains models → Scores containers → Explains results
+      </p>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:16px">
+      <button id="run-btn" class="btn btn-run" onclick="runPipeline()">▶ Run Pipeline</button>
+      <div id="progress-wrap" style="display:none;width:300px">
+        <div class="progress-bar-bg"><div id="progress-fill" class="progress-bar-fill" style="width:0%"></div></div>
+        <div id="progress-label" class="progress-label" style="color:rgba(255,255,255,.75)">Initializing…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Row -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Containers</div>
+      <div id="stat-total" class="stat-value" style="color:var(--primary)">0</div>
+    </div>
+    <div class="stat-card critical">
+      <div class="stat-label">🔴 Critical</div>
+      <div id="stat-critical" class="stat-value">0</div>
+    </div>
+    <div class="stat-card medium">
+      <div class="stat-label">🟡 Medium Risk</div>
+      <div id="stat-medium" class="stat-value">0</div>
+    </div>
+    <div class="stat-card low">
+      <div class="stat-label">🟢 Low Risk</div>
+      <div id="stat-low" class="stat-value">0</div>
+    </div>
+  </div>
+
+  <!-- Dashboard Image -->
+  <div id="dashboard-section" class="card" style="display:none">
+    <div class="card-title">📊 Risk Dashboard</div>
+    <img id="dashboard-img" class="dashboard-img" src="" alt="Dashboard" loading="lazy">
+    <div class="download-row" style="margin-top:14px">
+      <button class="btn btn-primary btn-sm" onclick="downloadFile('predictions')">⬇ predictions.csv</button>
+      <button class="btn btn-secondary btn-sm" onclick="downloadFile('dashboard')">⬇ Dashboard PNG</button>
+      <button class="btn btn-secondary btn-sm" onclick="downloadFile('report')">⬇ HTML Report</button>
+    </div>
+  </div>
+
+  <!-- Predictions Table -->
+  <div class="card">
+    <div class="card-title">📋 Container Predictions</div>
+    <div class="table-toolbar">
+      <input id="search-input" class="search-input" type="text" placeholder="🔍 Search by Container ID, country, port, explanation…" oninput="applyFilters()">
+      <select id="filter-select" class="filter-select" onchange="applyFilters()">
+        <option value="">All Risk Levels</option>
+        <option value="Critical">🔴 Critical</option>
+        <option value="Medium Risk">🟡 Medium Risk</option>
+        <option value="Low Risk">🟢 Low Risk</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-col="Container_ID" onclick="sortByColumn('Container_ID')">Container ID <span class="sort-icon">↕</span></th>
+            <th data-col="Risk_Score" onclick="sortByColumn('Risk_Score')" class="sorted">Risk Score <span class="sort-icon">↓</span></th>
+            <th data-col="Risk_Level" onclick="sortByColumn('Risk_Level')">Risk Level <span class="sort-icon">↕</span></th>
+            <th data-col="Origin_Country" onclick="sortByColumn('Origin_Country')">Origin Country <span class="sort-icon">↕</span></th>
+            <th data-col="Destination_Port" onclick="sortByColumn('Destination_Port')">Dest. Port <span class="sort-icon">↕</span></th>
+            <th>Explanation</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <tr><td colspan="6">
+            <div class="empty-state">
+              <div class="icon">🚢</div>
+              <p>No predictions yet. Click <strong>Run Pipeline</strong> to start.</p>
+            </div>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <div id="pagination-info" class="pagination-info">—</div>
+      <div class="page-btns">
+        <button id="prev-btn" class="btn btn-secondary btn-sm" onclick="prevPage()" disabled>‹ Prev</button>
+        <button id="next-btn" class="btn btn-secondary btn-sm" onclick="nextPage()" disabled>Next ›</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- ── Footer ───────────────────────────────────────────────────────────────── -->
+<footer>SmartContainer Risk Engine v1.0.0 — AI-powered customs risk scoring</footer>
+
+<!-- ── Modal ────────────────────────────────────────────────────────────────── -->
+<div id="modal-overlay" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- ── Toast Container ──────────────────────────────────────────────────────── -->
+<div id="toast-container" class="toast-container"></div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
