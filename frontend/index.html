@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartContainer Risk Engine</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* ─── CSS Design Tokens ───────────────────────────────── */
+    :root {
+      --color-bg:           #0f172a;
+      --color-surface:      #1e293b;
+      --color-surface-2:    #334155;
+      --color-border:       #475569;
+      --color-text-primary: #f1f5f9;
+      --color-text-muted:   #94a3b8;
+      --color-accent:       #3b82f6;
+      --color-accent-hover: #2563eb;
+
+      --color-critical: #ef4444;
+      --color-high:     #f97316;
+      --color-medium:   #eab308;
+      --color-low:      #22c55e;
+
+      --sidebar-width: 260px;
+    }
+
+    /* ─── Base ───────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ─── Scrollbar ──────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--color-surface); }
+    ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+
+    /* ─── Transitions ────────────────────────────────────── */
+    .transition-all { transition: all 0.2s ease; }
+
+    /* ─── Sidebar ────────────────────────────────────────── */
+    #sidebar {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      width: var(--sidebar-width);
+      background: var(--color-surface);
+      border-right: 1px solid var(--color-border);
+      display: flex;
+      flex-direction: column;
+      z-index: 40;
+      transition: width 0.2s ease;
+    }
+
+    #sidebar.collapsed { width: 64px; }
+    #sidebar.collapsed .nav-label,
+    #sidebar.collapsed .brand-text,
+    #sidebar.collapsed .status-text { display: none; }
+    #sidebar.collapsed .nav-link { justify-content: center; padding: 0.75rem; }
+
+    .brand-logo { padding: 1.5rem 1.25rem 1rem; border-bottom: 1px solid var(--color-border); }
+    .nav-link {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.75rem 1.25rem;
+      color: var(--color-text-muted);
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: all 0.2s ease;
+      border-radius: 0;
+      white-space: nowrap;
+      user-select: none;
+    }
+    .nav-link:hover { color: var(--color-text-primary); background: rgba(255,255,255,0.05); }
+    .nav-link.active {
+      color: var(--color-text-primary);
+      background: rgba(59,130,246,0.12);
+      border-left-color: var(--color-accent);
+    }
+    .nav-icon { font-size: 1.1rem; flex-shrink: 0; width: 20px; text-align: center; }
+    .status-bar {
+      margin-top: auto;
+      padding: 1rem 1.25rem;
+      border-top: 1px solid var(--color-border);
+    }
+
+    /* ─── Header ─────────────────────────────────────────── */
+    #header {
+      position: fixed;
+      top: 0;
+      left: var(--sidebar-width);
+      right: 0;
+      height: 64px;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0 1.5rem;
+      z-index: 30;
+      transition: left 0.2s ease;
+    }
+    #header.sidebar-collapsed { left: 64px; }
+
+    #search-bar {
+      flex: 1; max-width: 500px; min-width: 280px;
+      background: var(--color-bg);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 0.5rem 0.875rem;
+      color: var(--color-text-primary);
+      font-size: 0.875rem;
+      transition: all 0.2s ease;
+    }
+    #search-bar:focus { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.2); }
+    #search-bar::placeholder { color: var(--color-text-muted); }
+
+    /* ─── Main Content ───────────────────────────────────── */
+    #main {
+      margin-left: var(--sidebar-width);
+      margin-top: 64px;
+      padding: 1.5rem 2rem;
+      min-height: calc(100vh - 64px);
+      transition: margin-left 0.2s ease;
+    }
+    #main.sidebar-collapsed { margin-left: 64px; }
+
+    /* ─── Sections ───────────────────────────────────────── */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* ─── KPI Cards ──────────────────────────────────────── */
+    .kpi-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      transition: all 0.2s ease;
+    }
+    .kpi-card:hover { border-color: var(--color-accent); transform: translateY(-2px); }
+    .kpi-icon {
+      width: 44px; height: 44px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem;
+    }
+
+    /* ─── Donut Chart ────────────────────────────────────── */
+    .donut-segment {
+      fill: none;
+      stroke-linecap: butt;
+      transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    @keyframes drawSegment {
+      from { stroke-dashoffset: var(--full); }
+      to   { stroke-dashoffset: var(--target); }
+    }
+
+    /* ─── Alerts Feed ────────────────────────────────────── */
+    .alert-item {
+      border-left: 3px solid;
+      background: var(--color-bg);
+      border-radius: 0 8px 8px 0;
+      padding: 0.75rem 1rem;
+      transition: all 0.2s ease;
+    }
+    .alert-item:hover { background: rgba(255,255,255,0.04); }
+
+    /* ─── Table ──────────────────────────────────────────── */
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th {
+      background: var(--color-surface-2);
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      position: sticky; top: 0;
+      user-select: none;
+    }
+    .data-table th:hover { color: var(--color-text-primary); }
+    .data-table td {
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
+      border-bottom: 1px solid rgba(71,85,105,0.4);
+      white-space: nowrap;
+    }
+    .data-table tr:hover td { background: rgba(59,130,246,0.06); }
+    .data-table tr.selected td { background: rgba(59,130,246,0.1); border-left: 3px solid var(--color-accent); }
+    .data-table tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+    .data-table tr:hover td, .data-table tr.selected td { background: rgba(59,130,246,0.08) !important; }
+
+    /* ─── Risk Pills ─────────────────────────────────────── */
+    .risk-pill {
+      display: inline-flex; align-items: center;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .risk-critical { background: rgba(239,68,68,0.2); color: #ef4444; }
+    .risk-high     { background: rgba(249,115,22,0.2); color: #f97316; }
+    .risk-medium   { background: rgba(234,179,8,0.2);  color: #eab308; }
+    .risk-low      { background: rgba(34,197,94,0.2);  color: #22c55e; }
+    .regime-import  { background: rgba(59,130,246,0.2); color: #3b82f6; }
+    .regime-export  { background: rgba(168,85,247,0.2); color: #a855f7; }
+    .regime-transit { background: rgba(148,163,184,0.2); color: #94a3b8; }
+
+    /* ─── Score Bar ──────────────────────────────────────── */
+    .score-bar { height: 4px; border-radius: 2px; background: var(--color-surface-2); width: 60px; display: inline-block; vertical-align: middle; }
+    .score-fill { height: 100%; border-radius: 2px; }
+
+    /* ─── Upload Zone ────────────────────────────────────── */
+    #upload-zone {
+      border: 2px dashed var(--color-border);
+      border-radius: 16px;
+      height: 380px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 1rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    #upload-zone:hover, #upload-zone.dragover {
+      border-color: var(--color-accent);
+      background: rgba(59,130,246,0.05);
+    }
+    #upload-zone.dragover { border-style: solid; }
+
+    /* ─── Stepper ────────────────────────────────────────── */
+    .step-item { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem 0; }
+    .step-dot {
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: 1rem;
+    }
+    .step-dot.done   { background: rgba(34,197,94,0.2); color: #22c55e; }
+    .step-dot.active { background: rgba(59,130,246,0.2); color: var(--color-accent); }
+    .step-dot.pending{ background: rgba(148,163,184,0.1); color: var(--color-text-muted); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 1s linear infinite; display: inline-block; }
+
+    /* ─── Progress Bar ───────────────────────────────────── */
+    .progress-track { height: 8px; background: var(--color-surface-2); border-radius: 4px; overflow: hidden; }
+    .progress-fill {
+      height: 100%; border-radius: 4px;
+      background: linear-gradient(90deg, var(--color-accent), #818cf8);
+      transition: width 0.4s ease;
+    }
+    @keyframes progressPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    .progress-fill.animating { animation: progressPulse 1.5s ease-in-out infinite; }
+
+    /* ─── Settings ───────────────────────────────────────── */
+    .settings-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .toggle-switch {
+      position: relative; display: inline-block;
+      width: 44px; height: 24px;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--color-border);
+      border-radius: 24px;
+      transition: 0.2s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px; height: 18px;
+      left: 3px; bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+    .toggle-switch input:checked + .toggle-slider { background: var(--color-accent); }
+    .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%; height: 6px;
+      background: var(--color-surface-2);
+      border-radius: 3px; outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: var(--color-accent);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover { background: var(--color-accent-hover); }
+
+    /* ─── Modal ──────────────────────────────────────────── */
+    #modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      display: none;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(2px);
+    }
+    #modal-overlay.open { display: flex; }
+    #modal-box {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 16px;
+      width: min(700px, 95vw);
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+      animation: modalIn 0.2s ease;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.96) translateY(8px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .factor-bar { height: 6px; border-radius: 3px; background: var(--color-surface-2); }
+    .factor-fill { height: 100%; border-radius: 3px; background: var(--color-accent); }
+
+    /* ─── Notification Drawer ────────────────────────────── */
+    #notif-drawer {
+      position: fixed;
+      top: 64px; right: 0; bottom: 0;
+      width: 340px;
+      background: var(--color-surface);
+      border-left: 1px solid var(--color-border);
+      z-index: 50;
+      transform: translateX(100%);
+      transition: transform 0.25s ease;
+      overflow-y: auto;
+    }
+    #notif-drawer.open { transform: translateX(0); }
+    #notif-backdrop {
+      position: fixed; inset: 0; z-index: 49;
+      display: none;
+    }
+    #notif-backdrop.open { display: block; }
+
+    /* ─── Skeleton ───────────────────────────────────────── */
+    @keyframes shimmer {
+      0%   { background-position: -400px 0; }
+      100% { background-position: 400px 0; }
+    }
+    .skeleton {
+      background: linear-gradient(90deg, var(--color-surface) 25%, var(--color-surface-2) 50%, var(--color-surface) 75%);
+      background-size: 800px 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+    }
+
+    /* ─── Tooltip ────────────────────────────────────────── */
+    [data-tooltip] { position: relative; }
+    [data-tooltip]::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--color-surface-2);
+      color: var(--color-text-primary);
+      font-size: 0.75rem;
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      border: 1px solid var(--color-border);
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      z-index: 200;
+    }
+    [data-tooltip]:hover::after { opacity: 1; }
+
+    /* ─── Responsive ─────────────────────────────────────── */
+    @media (max-width: 1023px) {
+      #sidebar { width: 64px; }
+      #sidebar .nav-label, #sidebar .brand-text, #sidebar .status-text { display: none; }
+      #sidebar .nav-link { justify-content: center; padding: 0.75rem; }
+      #header { left: 64px; }
+      #main  { margin-left: 64px; }
+    }
+    @media (max-width: 640px) {
+      #main { padding: 1rem; }
+      #header { padding: 0 1rem; }
+      #search-bar { min-width: 120px; }
+    }
+
+    /* ─── Misc ───────────────────────────────────────────── */
+    .btn-accent {
+      background: var(--color-accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-accent:hover { background: var(--color-accent-hover); }
+    .btn-secondary {
+      background: transparent;
+      color: var(--color-text-muted);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-secondary:hover { color: var(--color-text-primary); border-color: var(--color-accent); }
+
+    .input-field {
+      background: var(--color-bg);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 0.5rem 0.75rem;
+      color: var(--color-text-primary);
+      font-size: 0.875rem;
+      transition: all 0.2s ease;
+    }
+    .input-field:focus { outline: none; border-color: var(--color-accent); }
+    .select-field {
+      background: var(--color-bg);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 0.5rem 0.75rem;
+      color: var(--color-text-primary);
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .select-field:focus { outline: none; border-color: var(--color-accent); }
+
+    /* Table container with overflow */
+    .table-container { overflow-x: auto; border-radius: 12px; border: 1px solid var(--color-border); }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════════════════════ -->
+<aside id="sidebar">
+  <!-- Brand -->
+  <div class="brand-logo">
+    <div class="flex items-center gap-3">
+      <div style="width:40px;height:40px;background:linear-gradient(135deg,#3b82f6,#6366f1);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <div style="font-size:0.95rem;font-weight:700;color:var(--color-text-primary);">SmartContainer</div>
+        <div style="font-size:0.7rem;color:var(--color-text-muted);margin-top:1px;">Risk Engine</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation -->
+  <nav style="padding:0.75rem 0;flex:1;">
+    <div class="nav-link active" data-section="dashboard" onclick="showSection('dashboard',this)">
+      <span class="nav-icon">🏠</span>
+      <span class="nav-label">Dashboard</span>
+    </div>
+    <div class="nav-link" data-section="records" onclick="showSection('records',this)">
+      <span class="nav-icon">📦</span>
+      <span class="nav-label">Container Records</span>
+    </div>
+    <div class="nav-link" data-section="upload" onclick="showSection('upload',this)">
+      <span class="nav-icon">⬆️</span>
+      <span class="nav-label">Upload / Batch</span>
+    </div>
+    <div class="nav-link" data-section="settings" onclick="showSection('settings',this)">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-label">Settings</span>
+    </div>
+  </nav>
+
+  <!-- Status -->
+  <div class="status-bar">
+    <div class="flex items-center gap-2">
+      <div style="width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px #22c55e;flex-shrink:0;"></div>
+      <span class="status-text" style="font-size:0.75rem;color:var(--color-text-muted);">System Online</span>
+      <span class="status-text" style="margin-left:auto;font-size:0.65rem;background:var(--color-surface-2);color:var(--color-text-muted);padding:0.15rem 0.45rem;border-radius:4px;">v1.0.0</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ══════════════════════════════════════════════════════════
+     HEADER
+══════════════════════════════════════════════════════════ -->
+<header id="header">
+  <!-- Hamburger + Page Title -->
+  <button onclick="toggleSidebar()" style="background:none;border:none;color:var(--color-text-muted);cursor:pointer;padding:0.25rem;flex-shrink:0;display:flex;align-items:center;">
+    <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+      <line x1="3" y1="6"  x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+  <h1 id="page-title" style="font-size:1.05rem;font-weight:600;color:var(--color-text-primary);white-space:nowrap;flex-shrink:0;">Dashboard</h1>
+
+  <!-- Search -->
+  <div style="flex:1;display:flex;justify-content:center;">
+    <div style="position:relative;width:100%;max-width:500px;">
+      <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--color-text-muted);" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="search-bar" type="text" placeholder="Search Container_ID, HS Code, Trader... (⌘K)" style="padding-left:2rem;" oninput="handleSearch(this.value)" />
+    </div>
+  </div>
+
+  <!-- Right cluster -->
+  <div style="display:flex;align-items:center;gap:0.75rem;flex-shrink:0;">
+    <!-- Date -->
+    <span id="header-date" style="font-size:0.8rem;color:var(--color-text-muted);"></span>
+
+    <!-- Notification Bell -->
+    <button onclick="toggleNotifDrawer()" style="position:relative;background:none;border:none;color:var(--color-text-muted);cursor:pointer;padding:0.35rem;border-radius:8px;transition:all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='none'">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+      <span id="notif-badge" style="position:absolute;top:-2px;right:-2px;background:#ef4444;color:white;font-size:0.55rem;font-weight:700;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;">6</span>
+    </button>
+
+    <!-- Avatar -->
+    <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:white;cursor:pointer;flex-shrink:0;">KS</div>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════════════════
+     NOTIFICATION DRAWER
+══════════════════════════════════════════════════════════ -->
+<div id="notif-backdrop" onclick="toggleNotifDrawer()"></div>
+<div id="notif-drawer">
+  <div style="padding:1.25rem 1.5rem;border-bottom:1px solid var(--color-border);display:flex;align-items:center;justify-content:space-between;">
+    <span style="font-size:0.95rem;font-weight:600;">Notifications</span>
+    <button onclick="toggleNotifDrawer()" style="background:none;border:none;color:var(--color-text-muted);cursor:pointer;font-size:1.2rem;">×</button>
+  </div>
+  <div style="padding:1rem;display:flex;flex-direction:column;gap:0.75rem;" id="notif-list"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MAIN CONTENT
+══════════════════════════════════════════════════════════ -->
+<main id="main">
+
+  <!-- ── SECTION: DASHBOARD ─────────────────────────────── -->
+  <section id="section-dashboard" class="section active">
+
+    <!-- KPI Cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-bottom:1.75rem;">
+      <div class="kpi-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-size:0.8rem;color:var(--color-text-muted);margin-bottom:0.5rem;">Total Containers Processed</div>
+            <div id="kpi-total" style="font-size:2rem;font-weight:700;line-height:1;">0</div>
+            <div style="font-size:0.75rem;color:#22c55e;margin-top:0.4rem;">↑ +12% from last batch</div>
+          </div>
+          <div class="kpi-icon" style="background:rgba(59,130,246,0.15);">📦</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-size:0.8rem;color:var(--color-text-muted);margin-bottom:0.5rem;">High-Risk Containers</div>
+            <div id="kpi-highrisk" style="font-size:2rem;font-weight:700;line-height:1;color:var(--color-critical);">0</div>
+            <div style="font-size:0.75rem;color:#ef4444;margin-top:0.4rem;">↑ +3.2%</div>
+          </div>
+          <div class="kpi-icon" style="background:rgba(239,68,68,0.15);">🔴</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-size:0.8rem;color:var(--color-text-muted);margin-bottom:0.5rem;">Anomalies Detected</div>
+            <div id="kpi-anomaly" style="font-size:2rem;font-weight:700;line-height:1;color:var(--color-high);">0</div>
+            <div style="font-size:0.75rem;color:#22c55e;margin-top:0.4rem;">↓ -1.8% (good)</div>
+          </div>
+          <div class="kpi-icon" style="background:rgba(249,115,22,0.15);">⚠️</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-size:0.8rem;color:var(--color-text-muted);margin-bottom:0.5rem;">Clearance Rate</div>
+            <div id="kpi-clearance" style="font-size:2rem;font-weight:700;line-height:1;color:#22c55e;">0%</div>
+            <div style="font-size:0.75rem;color:#22c55e;margin-top:0.4rem;">↑ +0.5%</div>
+          </div>
+          <div class="kpi-icon" style="background:rgba(34,197,94,0.15);">✅</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart + Alerts row -->
+    <div style="display:grid;grid-template-columns:1fr 380px;gap:1.5rem;align-items:start;">
+
+      <!-- Donut Chart Card -->
+      <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:1.5rem;">
+        <div style="font-size:0.95rem;font-weight:600;margin-bottom:1.25rem;">Risk Distribution</div>
+        <div style="display:flex;align-items:center;gap:2rem;flex-wrap:wrap;">
+          <!-- SVG Donut -->
+          <div style="position:relative;flex-shrink:0;">
+            <svg id="donut-chart" width="200" height="200" viewBox="0 0 200 200">
+              <!-- Background circle -->
+              <circle cx="100" cy="100" r="72" fill="none" stroke="var(--color-surface-2)" stroke-width="28"/>
+              <!-- Segments drawn by JS -->
+              <g id="donut-segments"></g>
+              <!-- Center label -->
+              <text x="100" y="95" text-anchor="middle" font-size="20" font-weight="700" fill="var(--color-text-primary)">8,481</text>
+              <text x="100" y="114" text-anchor="middle" font-size="10" fill="var(--color-text-muted)">containers</text>
+            </svg>
+          </div>
+          <!-- Legend -->
+          <div id="donut-legend" style="flex:1;display:flex;flex-direction:column;gap:0.75rem;"></div>
+        </div>
+      </div>
+
+      <!-- Recent Alerts Feed -->
+      <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:1.5rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+          <span style="font-size:0.95rem;font-weight:600;">Recent Alerts</span>
+          <span style="font-size:0.75rem;background:rgba(239,68,68,0.15);color:#ef4444;padding:0.2rem 0.6rem;border-radius:999px;font-weight:600;">6 active</span>
+        </div>
+        <div id="alerts-feed" style="display:flex;flex-direction:column;gap:0.6rem;max-height:320px;overflow-y:auto;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SECTION: CONTAINER RECORDS ────────────────────── -->
+  <section id="section-records" class="section">
+
+    <!-- Filter Bar -->
+    <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+      <div>
+        <label style="font-size:0.7rem;color:var(--color-text-muted);display:block;margin-bottom:3px;">Risk Level</label>
+        <select id="filter-risk" class="select-field" onchange="applyFilters()">
+          <option value="">All Levels</option>
+          <option value="Critical">Critical</option>
+          <option value="High">High</option>
+          <option value="Medium">Medium</option>
+          <option value="Low">Low</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:0.7rem;color:var(--color-text-muted);display:block;margin-bottom:3px;">Trade Regime</label>
+        <select id="filter-regime" class="select-field" onchange="applyFilters()">
+          <option value="">All Regimes</option>
+          <option value="Import">Import</option>
+          <option value="Export">Export</option>
+          <option value="Transit">Transit</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:0.7rem;color:var(--color-text-muted);display:block;margin-bottom:3px;">Date From</label>
+        <input type="date" id="filter-from" class="input-field" onchange="applyFilters()" />
+      </div>
+      <div>
+        <label style="font-size:0.7rem;color:var(--color-text-muted);display:block;margin-bottom:3px;">Date To</label>
+        <input type="date" id="filter-to" class="input-field" onchange="applyFilters()" />
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+        <span id="row-count" style="font-size:0.8rem;color:var(--color-text-muted);white-space:nowrap;"></span>
+        <button onclick="exportCSV()" class="btn-accent" style="display:flex;align-items:center;gap:0.4rem;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;overflow:hidden;">
+      <!-- Skeleton (shown on load) -->
+      <div id="table-skeleton" style="padding:1rem;">
+        <div class="skeleton" style="height:40px;margin-bottom:8px;"></div>
+        <div class="skeleton" style="height:40px;margin-bottom:8px;opacity:0.8;"></div>
+        <div class="skeleton" style="height:40px;opacity:0.6;"></div>
+      </div>
+      <div class="table-container" id="table-wrapper" style="display:none;">
+        <table class="data-table" id="main-table">
+          <thead>
+            <tr>
+              <th onclick="sortTable('id')">Container ID <span class="sort-arrow" data-col="id">↕</span></th>
+              <th onclick="sortTable('date')">Declaration Date <span class="sort-arrow" data-col="date">↕</span></th>
+              <th onclick="sortTable('regime')">Trade Regime <span class="sort-arrow" data-col="regime">↕</span></th>
+              <th onclick="sortTable('value')" style="text-align:right;">Declared Value <span class="sort-arrow" data-col="value">↕</span></th>
+              <th onclick="sortTable('dweight')" style="text-align:right;">Declared Wt <span class="sort-arrow" data-col="dweight">↕</span></th>
+              <th onclick="sortTable('mweight')" style="text-align:right;">Measured Wt <span class="sort-arrow" data-col="mweight">↕</span></th>
+              <th onclick="sortTable('score')">Risk Score <span class="sort-arrow" data-col="score">↕</span></th>
+              <th onclick="sortTable('risk')">Risk Level <span class="sort-arrow" data-col="risk">↕</span></th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+
+      <!-- Empty state -->
+      <div id="empty-state" style="display:none;padding:3rem;text-align:center;">
+        <div style="font-size:3rem;margin-bottom:0.75rem;">🔍</div>
+        <div style="font-size:1rem;font-weight:600;margin-bottom:0.4rem;">No containers match your filters</div>
+        <div style="font-size:0.85rem;color:var(--color-text-muted);">Try adjusting the search term or filters above.</div>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div id="pagination" style="display:flex;align-items:center;gap:0.75rem;margin-top:1rem;flex-wrap:wrap;">
+      <button id="btn-prev" onclick="changePage(-1)" class="btn-secondary">← Prev</button>
+      <div id="page-pills" style="display:flex;gap:0.35rem;"></div>
+      <button id="btn-next" onclick="changePage(1)" class="btn-secondary">Next →</button>
+      <span style="margin-left:auto;font-size:0.8rem;color:var(--color-text-muted);">Jump to:</span>
+      <input type="number" id="jump-page" min="1" style="width:60px;" class="input-field" onchange="jumpToPage(this.value)" />
+      <select id="per-page" class="select-field" onchange="changePerPage(this.value)">
+        <option value="15" selected>15 / page</option>
+        <option value="25">25 / page</option>
+        <option value="50">50 / page</option>
+      </select>
+    </div>
+  </section>
+
+  <!-- ── SECTION: UPLOAD ────────────────────────────────── -->
+  <section id="section-upload" class="section">
+    <div style="max-width:700px;margin:0 auto;">
+
+      <!-- Upload Zone -->
+      <div id="upload-zone"
+           ondragover="handleDragOver(event)"
+           ondragleave="handleDragLeave(event)"
+           ondrop="handleDrop(event)"
+           onclick="document.getElementById('file-input').click()">
+        <svg width="64" height="64" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+          <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+        </svg>
+        <div style="text-align:center;">
+          <div style="font-size:1.15rem;font-weight:600;">Drop your CSV files here</div>
+          <div style="font-size:0.85rem;color:var(--color-text-muted);margin-top:0.35rem;">Supports <code>Historical Data.csv</code> and <code>Real-Time Data.csv</code></div>
+        </div>
+        <button class="btn-accent" onclick="event.stopPropagation();document.getElementById('file-input').click()">Browse Files</button>
+        <input type="file" id="file-input" accept=".csv" multiple style="display:none;" onchange="handleFileSelect(this)" />
+      </div>
+
+      <!-- Processing Pipeline (hidden until triggered) -->
+      <div id="pipeline-section" style="display:none;margin-top:1.5rem;">
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:1.5rem;">
+          <div style="font-size:0.95rem;font-weight:600;margin-bottom:1rem;">Processing Pipeline</div>
+
+          <div id="pipeline-steps" style="border-left:2px solid var(--color-border);margin-left:18px;padding-left:1rem;display:flex;flex-direction:column;gap:0;">
+            <!-- Steps rendered by JS -->
+          </div>
+
+          <!-- Progress bar -->
+          <div style="margin-top:1.5rem;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:0.8rem;color:var(--color-text-muted);">Overall Progress</span>
+              <span id="progress-pct" style="font-size:0.8rem;font-weight:600;">0%</span>
+            </div>
+            <div class="progress-track">
+              <div id="progress-fill" class="progress-fill animating" style="width:0%;"></div>
+            </div>
+            <div id="progress-eta" style="font-size:0.75rem;color:var(--color-text-muted);margin-top:6px;">Estimated time remaining: ~45s</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SECTION: SETTINGS ──────────────────────────────── -->
+  <section id="section-settings" class="section">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem;max-width:900px;">
+
+      <!-- Model Configuration -->
+      <div class="settings-card">
+        <div style="font-size:0.95rem;font-weight:600;margin-bottom:1.25rem;">Model Configuration</div>
+        <div style="display:flex;flex-direction:column;gap:1.25rem;">
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <label style="font-size:0.85rem;">Critical Threshold</label>
+              <span id="thresh-critical-val" style="font-size:0.85rem;color:var(--color-critical);font-weight:600;">≥ 80</span>
+            </div>
+            <input type="range" min="50" max="100" value="80" id="thresh-critical" oninput="updateThreshold('critical',this.value)" style="accent-color:var(--color-critical);" />
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <label style="font-size:0.85rem;">High Threshold</label>
+              <span id="thresh-high-val" style="font-size:0.85rem;color:var(--color-high);font-weight:600;">60 – 79</span>
+            </div>
+            <input type="range" min="40" max="90" value="60" id="thresh-high" oninput="updateThreshold('high',this.value)" style="accent-color:var(--color-high);" />
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <label style="font-size:0.85rem;">Medium Threshold</label>
+              <span id="thresh-medium-val" style="font-size:0.85rem;color:var(--color-medium);font-weight:600;">40 – 59</span>
+            </div>
+            <input type="range" min="20" max="70" value="40" id="thresh-medium" oninput="updateThreshold('medium',this.value)" style="accent-color:var(--color-medium);" />
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <label style="font-size:0.85rem;">Low Threshold</label>
+              <span id="thresh-low-val" style="font-size:0.85rem;color:var(--color-low);font-weight:600;">&lt; 40</span>
+            </div>
+            <input type="range" min="0" max="50" value="40" id="thresh-low" disabled style="opacity:0.4;" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Notification Settings -->
+      <div class="settings-card">
+        <div style="font-size:0.95rem;font-weight:600;margin-bottom:1.25rem;">Notification Settings</div>
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-size:0.85rem;font-weight:500;">Critical Risk Alerts</div>
+              <div style="font-size:0.75rem;color:var(--color-text-muted);">Immediate notification for critical containers</div>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-size:0.85rem;font-weight:500;">High Risk Alerts</div>
+              <div style="font-size:0.75rem;color:var(--color-text-muted);">Notifications for high-risk containers</div>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-size:0.85rem;font-weight:500;">Batch Completion</div>
+              <div style="font-size:0.75rem;color:var(--color-text-muted);">Notify when batch processing completes</div>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-size:0.85rem;font-weight:500;">Anomaly Feed</div>
+              <div style="font-size:0.75rem;color:var(--color-text-muted);">Live feed of detected anomalies</div>
+            </div>
+            <label class="toggle-switch"><input type="checkbox"><span class="toggle-slider"></span></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Source Paths -->
+      <div class="settings-card" style="grid-column:1/-1;">
+        <div style="font-size:0.95rem;font-weight:600;margin-bottom:1.25rem;">Data Source Paths</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;">
+          <div>
+            <label style="font-size:0.8rem;color:var(--color-text-muted);display:block;margin-bottom:5px;">hist_path — Historical Data CSV</label>
+            <input type="text" class="input-field" value="Historical Data.csv" style="width:100%;" placeholder="e.g. data/Historical Data.csv" />
+          </div>
+          <div>
+            <label style="font-size:0.8rem;color:var(--color-text-muted);display:block;margin-bottom:5px;">rt_path — Real-Time Data CSV</label>
+            <input type="text" class="input-field" value="Real-Time Data.csv" style="width:100%;" placeholder="e.g. data/Real-Time Data.csv" />
+          </div>
+          <div>
+            <label style="font-size:0.8rem;color:var(--color-text-muted);display:block;margin-bottom:5px;">Output Directory</label>
+            <input type="text" class="input-field" value="output/" style="width:100%;" placeholder="e.g. output/" />
+          </div>
+          <div>
+            <label style="font-size:0.8rem;color:var(--color-text-muted);display:block;margin-bottom:5px;">Model Checkpoint Path</label>
+            <input type="text" class="input-field" value="models/risk_model.pkl" style="width:100%;" placeholder="e.g. models/risk_model.pkl" />
+          </div>
+        </div>
+        <div style="margin-top:1.25rem;display:flex;gap:0.75rem;">
+          <button class="btn-accent" onclick="saveSettings(event)">Save Settings</button>
+          <button class="btn-secondary" onclick="resetSettings()">Reset Defaults</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ══════════════════════════════════════════════════════════
+     EXPLAINABILITY MODAL
+══════════════════════════════════════════════════════════ -->
+<div id="modal-overlay" onclick="closeModalOnBackdrop(event)">
+  <div id="modal-box">
+    <!-- Modal Header -->
+    <div style="padding:1.5rem 1.5rem 1rem;border-bottom:1px solid var(--color-border);display:flex;align-items:flex-start;justify-content:space-between;">
+      <div>
+        <div id="modal-ctr-id" style="font-family:monospace;font-size:1.3rem;font-weight:700;color:var(--color-accent);"></div>
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.4rem;">
+          <span id="modal-risk-badge" class="risk-pill"></span>
+          <span style="font-size:0.8rem;color:var(--color-text-muted);">Explainability Report</span>
+        </div>
+      </div>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--color-text-muted);cursor:pointer;font-size:1.5rem;line-height:1;padding:0 0.25rem;">&times;</button>
+    </div>
+
+    <!-- Modal Body -->
+    <div style="padding:1.25rem 1.5rem;display:flex;flex-direction:column;gap:1.25rem;">
+      <!-- Risk Summary -->
+      <div id="modal-summary-banner" style="border-radius:10px;padding:1rem 1.25rem;">
+        <div style="font-size:0.85rem;line-height:1.6;" id="modal-summary-text"></div>
+      </div>
+
+      <!-- Contributing Factors -->
+      <div>
+        <div style="font-size:0.9rem;font-weight:600;margin-bottom:0.75rem;">Contributing Factors</div>
+        <div id="modal-factors" style="display:flex;flex-direction:column;gap:0.6rem;"></div>
+      </div>
+
+      <!-- Recommended Action -->
+      <div style="background:var(--color-bg);border-radius:10px;padding:1rem 1.25rem;">
+        <div style="font-size:0.85rem;font-weight:600;margin-bottom:0.6rem;color:var(--color-text-muted);">Recommended Action</div>
+        <div id="modal-action" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;"></div>
+      </div>
+    </div>
+
+    <!-- Modal Footer -->
+    <div style="padding:1rem 1.5rem;border-top:1px solid var(--color-border);display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+      <a href="#" style="font-size:0.85rem;color:var(--color-accent);">View Full Record</a>
+      <div style="margin-left:auto;display:flex;gap:0.6rem;">
+        <button class="btn-accent" style="display:flex;align-items:center;gap:0.4rem;font-size:0.8rem;padding:0.4rem 0.85rem;" onclick="downloadReport()">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download Report
+        </button>
+        <button class="btn-secondary" onclick="closeModal()" style="font-size:0.8rem;padding:0.4rem 0.85rem;">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════════════ -->
+<script>
+
+// ─── MOCK DATA ────────────────────────────────────────────
+const MOCK_DATA = [
+  { id:'CTR-0042891', date:'2025-11-03', regime:'Import',  value:18200,  dweight:1200,  mweight:4700,  score:94, risk:'Critical', hs:'930100', trader:'GenCo Ltd'        },
+  { id:'CTR-0018234', date:'2025-11-02', regime:'Import',  value:142000, dweight:3000,  mweight:3100,  score:81, risk:'Critical', hs:'847130', trader:'TechImports GmbH'  },
+  { id:'CTR-0067123', date:'2025-10-30', regime:'Export',  value:55000,  dweight:2200,  mweight:2250,  score:88, risk:'Critical', hs:'930100', trader:'ArmsCo SA'         },
+  { id:'CTR-0033412', date:'2025-10-28', regime:'Import',  value:8400,   dweight:900,   mweight:940,   score:72, risk:'High',     hs:'210690', trader:'NewTrade LLC'      },
+  { id:'CTR-0055098', date:'2025-10-25', regime:'Transit', value:31000,  dweight:5000,  mweight:5200,  score:68, risk:'High',     hs:'300490', trader:'PharmRoute AG'     },
+  { id:'CTR-0009871', date:'2025-10-22', regime:'Import',  value:12000,  dweight:1100,  mweight:1150,  score:63, risk:'High',     hs:'610910', trader:'FashionHub Co'     },
+  { id:'CTR-0074521', date:'2025-10-20', regime:'Export',  value:9800,   dweight:700,   mweight:720,   score:58, risk:'Medium',   hs:'950300', trader:'ToyWorld Ltd'      },
+  { id:'CTR-0028834', date:'2025-10-18', regime:'Import',  value:47500,  dweight:8000,  mweight:8100,  score:55, risk:'Medium',   hs:'847989', trader:'MachCorp Inc'      },
+  { id:'CTR-0061293', date:'2025-10-15', regime:'Export',  value:3200,   dweight:400,   mweight:415,   score:48, risk:'Medium',   hs:'420291', trader:'LeatherGo SA'      },
+  { id:'CTR-0039044', date:'2025-10-12', regime:'Transit', value:22000,  dweight:2800,  mweight:2850,  score:45, risk:'Medium',   hs:'730890', trader:'SteelEx GmbH'      },
+  { id:'CTR-0083127', date:'2025-10-10', regime:'Import',  value:6700,   dweight:500,   mweight:512,   score:38, risk:'Low',      hs:'940390', trader:'FurnCo Ltd'        },
+  { id:'CTR-0015670', date:'2025-10-08', regime:'Export',  value:11300,  dweight:1500,  mweight:1510,  score:32, risk:'Low',      hs:'850710', trader:'BattPower Inc'     },
+  { id:'CTR-0047289', date:'2025-10-05', regime:'Import',  value:5100,   dweight:300,   mweight:308,   score:27, risk:'Low',      hs:'090111', trader:'CoffeeTrade AG'    },
+  { id:'CTR-0092384', date:'2025-10-03', regime:'Export',  value:33000,  dweight:6200,  mweight:6350,  score:25, risk:'Low',      hs:'720210', trader:'MetalWorks SA'     },
+  { id:'CTR-0006753', date:'2025-10-01', regime:'Import',  value:4400,   dweight:250,   mweight:252,   score:18, risk:'Low',      hs:'220210', trader:'BevCo LLC'         },
+  { id:'CTR-0058492', date:'2025-09-28', regime:'Transit', value:78000,  dweight:10000, mweight:10200, score:76, risk:'High',     hs:'870323', trader:'AutoParts GmbH'    },
+  { id:'CTR-0021145', date:'2025-09-25', regime:'Import',  value:15600,  dweight:2100,  mweight:2500,  score:85, risk:'Critical', hs:'870899', trader:'QuickShip Ltd'     },
+  { id:'CTR-0069038', date:'2025-09-22', regime:'Export',  value:29000,  dweight:4300,  mweight:4320,  score:41, risk:'Medium',   hs:'392310', trader:'PlastiCo SA'       },
+  { id:'CTR-0035617', date:'2025-09-20', regime:'Import',  value:71000,  dweight:9500,  mweight:9600,  score:22, risk:'Low',      hs:'710812', trader:'GoldTrade Inc'     },
+  { id:'CTR-0078903', date:'2025-09-18', regime:'Export',  value:19800,  dweight:3500,  mweight:3550,  score:61, risk:'High',     hs:'840890', trader:'EngineParts Corp'  },
+];
+
+// ─── ALERTS DATA ──────────────────────────────────────────
+const ALERTS = [
+  { level:'critical', title:'Weight Discrepancy',     ctr:'CTR-0042891', desc:'Declared 1.2T, measured 4.7T',              time:'2m ago'  },
+  { level:'high',     title:'Value/Weight Mismatch',  ctr:'CTR-0018234', desc:'Value-to-weight ratio 47× above norm',       time:'8m ago'  },
+  { level:'critical', title:'High-Risk HS Code',      ctr:'CTR-0067123', desc:'HS Code 930100 flagged for dual-use',        time:'14m ago' },
+  { level:'medium',   title:'Trader Pattern Anomaly', ctr:'CTR-0033412', desc:'New exporter, 3rd shipment anomaly',         time:'31m ago' },
+  { level:'high',     title:'Route Irregularity',     ctr:'CTR-0055098', desc:'Unusual port-of-entry combination detected', time:'1h ago'  },
+  { level:'medium',   title:'Declaration Date Gap',   ctr:'CTR-0009871', desc:'47-day gap in declaration history',          time:'2h ago'  },
+];
+
+// ─── DONUT CHART DATA ─────────────────────────────────────
+const DONUT_SEGMENTS = [
+  { label:'Critical', pct:14.7, color:'#ef4444', count:1246 },
+  { label:'High',     pct:21.3, color:'#f97316', count:1806 },
+  { label:'Medium',   pct:33.1, color:'#eab308', count:2807 },
+  { label:'Low',      pct:30.9, color:'#22c55e', count:2622 },
+];
+
+// ─── PIPELINE STEPS ───────────────────────────────────────
+const PIPELINE_STEPS = [
+  { icon:'✅', label:'File Validated',    detail:'Historical Data.csv (6.1 MB)',         status:'done'    },
+  { icon:'✅', label:'Column Mapping',    detail:'13 columns mapped, 2 renamed',          status:'done'    },
+  { icon:'🔄', label:'Risk Scoring',      detail:'Processing 8,481 records...',           status:'active'  },
+  { icon:'⏳', label:'Report Generation', detail:'Pending',                               status:'pending' },
+];
+
+// ─── NOTIFICATIONS DATA ───────────────────────────────────
+const NOTIFICATIONS = [
+  { icon:'🔴', title:'Critical alert: CTR-0042891',      body:'Weight discrepancy flagged',         time:'2m ago'  },
+  { icon:'🟠', title:'High alert: CTR-0018234',          body:'Value/weight mismatch detected',     time:'8m ago'  },
+  { icon:'🔴', title:'Critical alert: CTR-0067123',      body:'HS Code 930100 flagged',             time:'14m ago' },
+  { icon:'📦', title:'Batch #1024 complete',             body:'8,481 records processed',            time:'1h ago'  },
+  { icon:'🟡', title:'Medium alert: CTR-0033412',        body:'Trader pattern anomaly',             time:'31m ago' },
+  { icon:'⚙️', title:'Model retrained',                  body:'Accuracy improved to 94.2%',         time:'3h ago'  },
+];
+
+// ─── STATE ────────────────────────────────────────────────
+let currentPage    = 1;
+let perPage        = 15;
+let sortCol        = 'score';
+let sortDir        = 'desc';
+let searchQuery    = '';
+let filterRisk     = '';
+let filterRegime   = '';
+let sidebarCollapsed = false;
+let notifOpen      = false;
+
+// ─── DOM READY ────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  setHeaderDate();
+  buildAlertsFeed();
+  buildDonutChart();
+  buildNotifList();
+  animateKPIs();
+  setTimeout(() => {
+    showTable();
+    renderTable();
+  }, 1200);
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      document.getElementById('search-bar').focus();
+    }
+    if (e.key === 'Escape') {
+      closeModal();
+      if (notifOpen) toggleNotifDrawer();
+    }
+  });
+});
+
+// ─── HEADER DATE ──────────────────────────────────────────
+function setHeaderDate() {
+  const now = new Date();
+  document.getElementById('header-date').textContent =
+    now.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+// ─── SIDEBAR TOGGLE ───────────────────────────────────────
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  document.getElementById('sidebar').classList.toggle('collapsed', sidebarCollapsed);
+  document.getElementById('header').classList.toggle('sidebar-collapsed', sidebarCollapsed);
+  document.getElementById('main').classList.toggle('sidebar-collapsed', sidebarCollapsed);
+}
+
+// ─── SECTION NAVIGATION ───────────────────────────────────
+const PAGE_TITLES = {
+  dashboard: 'Dashboard',
+  records:   'Container Records',
+  upload:    'Upload / Batch Process',
+  settings:  'Settings',
+};
+
+function showSection(id, el) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('section-' + id).classList.add('active');
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('page-title').textContent = PAGE_TITLES[id] || id;
+  if (id === 'records') renderTable();
+}
+
+// ─── KPI COUNTER ANIMATION ────────────────────────────────
+function animateCount(el, target, suffix, decimals = 0) {
+  const duration = 1400;
+  const steps    = 50;
+  const interval = duration / steps;
+  let current = 0;
+  const increment = target / steps;
+  const timer = setInterval(() => {
+    current = Math.min(current + increment, target);
+    const display = decimals ? current.toFixed(1) : Math.round(current).toLocaleString();
+    el.textContent = display + suffix;
+    if (current >= target) clearInterval(timer);
+  }, interval);
+}
+
+function animateKPIs() {
+  setTimeout(() => animateCount(document.getElementById('kpi-total'),    8481, ''),   100);
+  setTimeout(() => animateCount(document.getElementById('kpi-highrisk'), 1243, ''),   200);
+  setTimeout(() => animateCount(document.getElementById('kpi-anomaly'),   387, ''),   300);
+  setTimeout(() => animateCount(document.getElementById('kpi-clearance'), 85.3, '%', 1), 400);
+}
+
+// ─── DONUT CHART ──────────────────────────────────────────
+function buildDonutChart() {
+  const r = 72;
+  const cx = 100, cy = 100;
+  const circumference = 2 * Math.PI * r;
+  let offset = 0; // start from top (-90°)
+  const startAngle = -90; // degrees
+  const seg = document.getElementById('donut-segments');
+  const legend = document.getElementById('donut-legend');
+  let dashOffset = 0;
+
+  DONUT_SEGMENTS.forEach((d, i) => {
+    const frac = d.pct / 100;
+    const dash = frac * circumference;
+    const gap  = circumference - dash;
+
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', cx);
+    circle.setAttribute('cy', cy);
+    circle.setAttribute('r', r);
+    circle.setAttribute('fill', 'none');
+    circle.setAttribute('stroke', d.color);
+    circle.setAttribute('stroke-width', '28');
+    circle.setAttribute('stroke-dasharray', `${dash} ${gap}`);
+    // rotate so segments are sequential
+    const rotation = startAngle + (dashOffset / circumference) * 360;
+    circle.setAttribute('transform', `rotate(${rotation} ${cx} ${cy})`);
+    circle.classList.add('donut-segment');
+    // Animate: start fully hidden, expand to target
+    circle.style.setProperty('--full', circumference);
+    circle.style.setProperty('--target', gap);
+    circle.style.strokeDashoffset = circumference;
+    seg.appendChild(circle);
+
+    // Trigger animation after a staggered delay
+    setTimeout(() => {
+      circle.style.transition = `stroke-dashoffset 1s cubic-bezier(0.4,0,0.2,1) ${i * 0.2}s`;
+      circle.style.strokeDashoffset = gap;
+    }, 100);
+
+    dashOffset += dash;
+
+    // Legend item
+    const item = document.createElement('div');
+    item.style.cssText = 'display:flex;align-items:center;gap:0.6rem;';
+    item.innerHTML = `
+      <div style="width:12px;height:12px;border-radius:3px;background:${d.color};flex-shrink:0;"></div>
+      <div style="flex:1;">
+        <div style="font-size:0.8rem;font-weight:500;">${d.label}</div>
+        <div style="font-size:0.72rem;color:var(--color-text-muted);">${d.pct}% — ${d.count.toLocaleString()} containers</div>
+      </div>
+    `;
+    legend.appendChild(item);
+  });
+}
+
+// ─── ALERTS FEED ──────────────────────────────────────────
+function buildAlertsFeed() {
+  const feed = document.getElementById('alerts-feed');
+  const colors = { critical:'var(--color-critical)', high:'var(--color-high)', medium:'var(--color-medium)' };
+  const emojis = { critical:'🔴', high:'🟠', medium:'🟡' };
+  ALERTS.forEach(a => {
+    const div = document.createElement('div');
+    div.className = 'alert-item';
+    div.style.borderColor = colors[a.level] || colors.medium;
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div style="font-size:0.82rem;font-weight:600;">${emojis[a.level]} ${a.title}</div>
+        <span style="font-size:0.7rem;color:var(--color-text-muted);flex-shrink:0;margin-left:0.5rem;">${a.time}</span>
+      </div>
+      <div style="margin-top:2px;">
+        <span style="font-family:monospace;font-size:0.75rem;color:var(--color-accent);">${a.ctr}</span>
+        <span style="font-size:0.75rem;color:var(--color-text-muted);margin-left:0.4rem;">${a.desc}</span>
+      </div>
+    `;
+    feed.appendChild(div);
+  });
+}
+
+// ─── NOTIFICATION DRAWER ──────────────────────────────────
+function buildNotifList() {
+  const list = document.getElementById('notif-list');
+  NOTIFICATIONS.forEach(n => {
+    const div = document.createElement('div');
+    div.style.cssText = 'background:var(--color-bg);border-radius:8px;padding:0.75rem;border:1px solid var(--color-border);';
+    div.innerHTML = `
+      <div style="display:flex;gap:0.6rem;align-items:flex-start;">
+        <span style="font-size:1rem;flex-shrink:0;">${n.icon}</span>
+        <div style="flex:1;">
+          <div style="font-size:0.82rem;font-weight:600;">${n.title}</div>
+          <div style="font-size:0.76rem;color:var(--color-text-muted);margin-top:1px;">${n.body}</div>
+        </div>
+        <span style="font-size:0.7rem;color:var(--color-text-muted);flex-shrink:0;">${n.time}</span>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function toggleNotifDrawer() {
+  notifOpen = !notifOpen;
+  document.getElementById('notif-drawer').classList.toggle('open', notifOpen);
+  document.getElementById('notif-backdrop').classList.toggle('open', notifOpen);
+}
+
+// ─── TABLE SKELETON → TABLE ───────────────────────────────
+function showTable() {
+  document.getElementById('table-skeleton').style.display = 'none';
+  document.getElementById('table-wrapper').style.display = 'block';
+}
+
+// ─── FILTERING PIPELINE ───────────────────────────────────
+function getFilteredData() {
+  return MOCK_DATA.filter(row => {
+    const q = searchQuery.toLowerCase();
+    const matchSearch = !q ||
+      row.id.toLowerCase().includes(q) ||
+      row.hs.toLowerCase().includes(q) ||
+      row.trader.toLowerCase().includes(q);
+    const matchRisk   = !filterRisk   || row.risk === filterRisk;
+    const matchRegime = !filterRegime || row.regime === filterRegime;
+    return matchSearch && matchRisk && matchRegime;
+  });
+}
+
+function getSortedData(data) {
+  return [...data].sort((a, b) => {
+    let av, bv;
+    switch (sortCol) {
+      case 'id':      av = a.id;      bv = b.id;      break;
+      case 'date':    av = a.date;    bv = b.date;    break;
+      case 'regime':  av = a.regime;  bv = b.regime;  break;
+      case 'value':   av = a.value;   bv = b.value;   break;
+      case 'dweight': av = a.dweight; bv = b.dweight; break;
+      case 'mweight': av = a.mweight; bv = b.mweight; break;
+      case 'score':   av = a.score;   bv = b.score;   break;
+      case 'risk': {
+        const order = { Critical:0, High:1, Medium:2, Low:3 };
+        av = order[a.risk]; bv = order[b.risk]; break;
+      }
+      default: av = a.score; bv = b.score;
+    }
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ?  1 : -1;
+    return 0;
+  });
+}
+
+// ─── RENDER TABLE ─────────────────────────────────────────
+function renderTable() {
+  const filtered = getFilteredData();
+  const sorted   = getSortedData(filtered);
+  const total    = sorted.length;
+  const pages    = Math.max(1, Math.ceil(total / perPage));
+
+  if (currentPage > pages) currentPage = pages;
+
+  const start = (currentPage - 1) * perPage;
+  const end   = Math.min(start + perPage, total);
+  const slice = sorted.slice(start, end);
+
+  const tbody   = document.getElementById('table-body');
+  const empty   = document.getElementById('empty-state');
+  const wrapper = document.getElementById('table-wrapper');
+
+  if (total === 0) {
+    wrapper.style.display = 'none';
+    empty.style.display   = 'block';
+    document.getElementById('row-count').textContent = 'No records';
+    document.getElementById('pagination').style.display = 'none';
+    return;
+  }
+  wrapper.style.display = 'block';
+  empty.style.display   = 'none';
+  document.getElementById('pagination').style.display = 'flex';
+  document.getElementById('row-count').textContent =
+    `Showing ${start + 1}–${end} of ${total.toLocaleString()} records`;
+
+  tbody.innerHTML = '';
+  slice.forEach(row => {
+    const riskClass = 'risk-' + row.risk.toLowerCase();
+    const regimeClass = 'regime-' + row.regime.toLowerCase();
+    const weightDiff = Math.abs(row.mweight - row.dweight) / row.dweight;
+    const weightColor = weightDiff > 0.2 ? 'color:var(--color-critical);font-weight:600;' : '';
+    const scoreColor = row.risk === 'Critical' ? '#ef4444'
+                     : row.risk === 'High'     ? '#f97316'
+                     : row.risk === 'Medium'   ? '#eab308'
+                     : '#22c55e';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span style="font-family:monospace;color:var(--color-accent);cursor:pointer;" onclick="openModal('${row.id}')">${row.id}</span></td>
+      <td>${formatDate(row.date)}</td>
+      <td><span class="risk-pill ${regimeClass}">${row.regime}</span></td>
+      <td style="text-align:right;">${formatCurrency(row.value)}</td>
+      <td style="text-align:right;">${row.dweight.toLocaleString()} kg</td>
+      <td style="text-align:right;${weightColor}">${row.mweight.toLocaleString()} kg</td>
+      <td>
+        <div data-tooltip="Score: ${row.score}/100 — computed from ${3 + Math.floor(row.score/20)} contributing factors" style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:0.82rem;font-weight:600;">${row.score}</span>
+          <div class="score-bar"><div class="score-fill" style="width:${row.score}%;background:${scoreColor};"></div></div>
+        </div>
+      </td>
+      <td><span class="risk-pill ${riskClass}">${row.risk}</span></td>
+      <td>
+        <button onclick="openModal('${row.id}')" class="btn-accent" style="font-size:0.75rem;padding:0.3rem 0.65rem;">Explain</button>
+      </td>
+    `;
+    tr.addEventListener('click', (e) => {
+      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'SPAN') return;
+      document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected'));
+      tr.classList.toggle('selected');
+    });
+    tbody.appendChild(tr);
+  });
+
+  // Update sort arrows
+  document.querySelectorAll('.sort-arrow').forEach(el => {
+    const col = el.dataset.col;
+    el.textContent = col === sortCol ? (sortDir === 'asc' ? '↑' : '↓') : '↕';
+    el.style.color = col === sortCol ? 'var(--color-accent)' : 'var(--color-text-muted)';
+  });
+
+  renderPagination(pages);
+}
+
+function formatDate(d) {
+  // Append T00:00:00 to treat YYYY-MM-DD as local time, avoiding UTC timezone shifts
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+function formatCurrency(v) {
+  return '$' + v.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+
+// ─── SORT ─────────────────────────────────────────────────
+function sortTable(col) {
+  if (sortCol === col) {
+    sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortCol = col;
+    sortDir = 'desc';
+  }
+  currentPage = 1;
+  renderTable();
+}
+
+// ─── PAGINATION ───────────────────────────────────────────
+function renderPagination(totalPages) {
+  const pills = document.getElementById('page-pills');
+  pills.innerHTML = '';
+  const maxVisible = 5;
+  let start = Math.max(1, currentPage - 2);
+  let end   = Math.min(totalPages, start + maxVisible - 1);
+  if (end - start < maxVisible - 1) start = Math.max(1, end - maxVisible + 1);
+
+  for (let i = start; i <= end; i++) {
+    const btn = document.createElement('button');
+    btn.textContent = i;
+    btn.style.cssText = `padding:0.35rem 0.65rem;border-radius:6px;font-size:0.8rem;cursor:pointer;border:1px solid;
+      ${i === currentPage
+        ? 'background:var(--color-accent);color:white;border-color:var(--color-accent);'
+        : 'background:transparent;color:var(--color-text-muted);border-color:var(--color-border);'}`;
+    btn.onclick = () => { currentPage = i; renderTable(); };
+    pills.appendChild(btn);
+  }
+  document.getElementById('btn-prev').disabled = currentPage === 1;
+  document.getElementById('btn-next').disabled = currentPage === totalPages;
+  document.getElementById('btn-prev').style.opacity = currentPage === 1 ? '0.4' : '1';
+  document.getElementById('btn-next').style.opacity = currentPage === totalPages ? '0.4' : '1';
+}
+
+function changePage(dir) {
+  const filtered = getFilteredData();
+  const pages = Math.ceil(filtered.length / perPage);
+  currentPage = Math.max(1, Math.min(pages, currentPage + dir));
+  renderTable();
+}
+
+function jumpToPage(v) {
+  const filtered = getFilteredData();
+  const pages = Math.ceil(filtered.length / perPage);
+  currentPage = Math.max(1, Math.min(pages, parseInt(v) || 1));
+  renderTable();
+}
+
+function changePerPage(v) {
+  perPage = parseInt(v);
+  currentPage = 1;
+  renderTable();
+}
+
+// ─── SEARCH ───────────────────────────────────────────────
+function handleSearch(v) {
+  searchQuery = v.trim();
+  currentPage = 1;
+  renderTable();
+}
+
+// ─── FILTERS ─────────────────────────────────────────────
+function applyFilters() {
+  filterRisk   = document.getElementById('filter-risk').value;
+  filterRegime = document.getElementById('filter-regime').value;
+  currentPage  = 1;
+  renderTable();
+}
+
+// ─── EXPORT CSV ───────────────────────────────────────────
+function exportCSV() {
+  const data = getSortedData(getFilteredData());
+  const headers = ['Container_ID','Declaration_Date','Trade_Regime','Declared_Value','Declared_Weight_kg','Measured_Weight_kg','Risk_Score','Risk_Level','HS_Code','Trader'];
+  const rows = data.map(r => [r.id, r.date, r.regime, r.value, r.dweight, r.mweight, r.score, r.risk, r.hs, r.trader].join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type:'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'container_records.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── UPLOAD ───────────────────────────────────────────────
+function handleDragOver(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.add('dragover');
+}
+function handleDragLeave() {
+  document.getElementById('upload-zone').classList.remove('dragover');
+}
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('dragover');
+  triggerPipeline(e.dataTransfer.files[0]?.name || 'Historical Data.csv');
+}
+function handleFileSelect(input) {
+  if (input.files.length) triggerPipeline(input.files[0].name);
+}
+
+function triggerPipeline(filename) {
+  document.getElementById('pipeline-section').style.display = 'block';
+  buildPipelineSteps(filename);
+  simulateProgress();
+}
+
+function buildPipelineSteps(filename) {
+  const container = document.getElementById('pipeline-steps');
+  container.innerHTML = '';
+  PIPELINE_STEPS.forEach((step, i) => {
+    const div = document.createElement('div');
+    div.className = 'step-item';
+    const iconClass = step.status;
+    const icon = step.status === 'active'
+      ? '<span class="spinner">🔄</span>'
+      : step.icon;
+    const detail = i === 0 ? `${filename} (6.1 MB)` : step.detail;
+    div.innerHTML = `
+      <div class="step-dot ${iconClass}">${icon}</div>
+      <div>
+        <div style="font-size:0.875rem;font-weight:600;">${step.label}</div>
+        <div style="font-size:0.78rem;color:var(--color-text-muted);margin-top:2px;">${detail}</div>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function simulateProgress() {
+  let pct = 42;
+  const fill = document.getElementById('progress-fill');
+  const pctEl = document.getElementById('progress-pct');
+  const eta   = document.getElementById('progress-eta');
+  fill.style.width = pct + '%';
+  pctEl.textContent = pct + '%';
+
+  const timer = setInterval(() => {
+    pct += Math.random() * 3;
+    if (pct >= 100) { pct = 100; clearInterval(timer); eta.textContent = 'Complete!'; fill.classList.remove('animating'); }
+    fill.style.width = Math.min(pct, 100).toFixed(1) + '%';
+    pctEl.textContent = Math.min(Math.round(pct), 100) + '%';
+    const remaining = Math.max(0, Math.round((100 - pct) * 0.45));
+    if (pct < 100) eta.textContent = `Estimated time remaining: ~${remaining}s`;
+  }, 800);
+}
+
+// ─── SETTINGS ─────────────────────────────────────────────
+function updateThreshold(level, value) {
+  const el = document.getElementById(`thresh-${level}-val`);
+  if (level === 'critical') el.textContent = `≥ ${value}`;
+  else if (level === 'high') el.textContent = `${value} – ${parseInt(value) + 19}`;
+  else if (level === 'medium') el.textContent = `${value} – ${parseInt(value) + 19}`;
+}
+
+function saveSettings(event) {
+  const btn = event.currentTarget;
+  const orig = btn.textContent;
+  btn.textContent = '✅ Saved!';
+  btn.style.background = '#22c55e';
+  setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
+}
+
+function resetSettings() {
+  document.getElementById('thresh-critical').value = 80;
+  document.getElementById('thresh-high').value = 60;
+  document.getElementById('thresh-medium').value = 40;
+  updateThreshold('critical', 80);
+  updateThreshold('high', 60);
+  updateThreshold('medium', 40);
+}
+
+// ─── MODAL ────────────────────────────────────────────────
+function openModal(ctrId) {
+  const row = MOCK_DATA.find(r => r.id === ctrId);
+  if (!row) return;
+
+  document.getElementById('modal-ctr-id').textContent = row.id;
+  const badge = document.getElementById('modal-risk-badge');
+  badge.textContent = row.risk;
+  badge.className = 'risk-pill risk-' + row.risk.toLowerCase();
+
+  // Summary banner
+  const colors = { Critical:'rgba(239,68,68,0.12)', High:'rgba(249,115,22,0.12)', Medium:'rgba(234,179,8,0.12)', Low:'rgba(34,197,94,0.12)' };
+  const borderColors = { Critical:'#ef4444', High:'#f97316', Medium:'#eab308', Low:'#22c55e' };
+  const banner = document.getElementById('modal-summary-banner');
+  banner.style.background = colors[row.risk] || colors.High;
+  banner.style.border = `1px solid ${borderColors[row.risk] || borderColors.High}`;
+  document.getElementById('modal-summary-text').innerHTML =
+    `This container was classified as <strong>${row.risk.toUpperCase()} RISK</strong> due to a combination of ` +
+    (row.risk === 'Critical' || row.risk === 'High'
+      ? `significant weight discrepancy (declared ${(row.dweight/1000).toFixed(1)}T, measured ${(row.mweight/1000).toFixed(1)}T) and a flagged HS Code <strong>${row.hs}</strong> with a history of mis-declaration.`
+      : `minor anomalies in trader history and declaration timing. Automated checks completed with low confidence flags.`);
+
+  // Factors
+  const weightDiff = Math.abs(row.mweight - row.dweight) / row.dweight;
+  const factors = [
+    { icon:'⚖️', name:'Weight Discrepancy',  observed:`${(row.mweight/1000).toFixed(1)}T`, expected:`${(row.dweight/1000).toFixed(1)}T`, contrib: Math.min(38, Math.round(weightDiff * 60 + 10)) },
+    { icon:'🏷️', name:'HS Code Risk',        observed:row.hs, expected:'Low-risk range',    contrib:29 },
+    { icon:'🌍', name:'Route Anomaly',        observed:'Via Port X', expected:'Standard route', contrib:18 },
+    { icon:'🗓️', name:'Declaration Gap',     observed:'47 days', expected:'< 14 days',       contrib:15 },
+  ];
+  const factorsEl = document.getElementById('modal-factors');
+  factorsEl.innerHTML = '';
+  factors.forEach(f => {
+    const div = document.createElement('div');
+    div.style.cssText = 'background:var(--color-bg);border-radius:8px;padding:0.75rem;display:flex;gap:0.75rem;align-items:center;';
+    div.innerHTML = `
+      <span style="font-size:1.1rem;flex-shrink:0;">${f.icon}</span>
+      <div style="flex:1;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+          <span style="font-size:0.82rem;font-weight:600;">${f.name}</span>
+          <span style="font-size:0.78rem;color:var(--color-text-muted);">+${f.contrib}%</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--color-text-muted);margin-bottom:6px;">
+          Observed: <strong style="color:var(--color-text-primary);">${f.observed}</strong> &nbsp;|&nbsp;
+          Expected: <strong style="color:var(--color-text-primary);">${f.expected}</strong>
+        </div>
+        <div class="factor-bar"><div class="factor-fill" style="width:${f.contrib}%;"></div></div>
+      </div>
+    `;
+    factorsEl.appendChild(div);
+  });
+
+  // Recommended Action
+  const actions = {
+    Critical: { emoji:'🔴', text:'Refer for Physical Inspection', color:'rgba(239,68,68,0.15)', border:'#ef4444' },
+    High:     { emoji:'🟠', text:'Refer for Physical Inspection', color:'rgba(249,115,22,0.15)', border:'#f97316' },
+    Medium:   { emoji:'🟡', text:'Flag for Document Review',       color:'rgba(234,179,8,0.15)',  border:'#eab308' },
+    Low:      { emoji:'🟢', text:'Auto-clear with Monitoring',     color:'rgba(34,197,94,0.15)',  border:'#22c55e' },
+  };
+  const act = actions[row.risk] || actions.Medium;
+  document.getElementById('modal-action').innerHTML = `
+    <div style="background:${act.color};border:1px solid ${act.border};border-radius:8px;padding:0.5rem 1rem;font-size:0.85rem;font-weight:600;">
+      ${act.emoji} ${act.text}
+    </div>
+    <button class="btn-secondary" style="font-size:0.8rem;padding:0.4rem 0.85rem;">+ Add to Watchlist</button>
+  `;
+
+  document.getElementById('modal-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function closeModalOnBackdrop(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+}
+
+function downloadReport() {
+  const id = document.getElementById('modal-ctr-id').textContent;
+  alert(`Report download started for ${id}\n(In production this would generate a PDF report.)`);
+}
+
+</script>
+</body>
+</html>
