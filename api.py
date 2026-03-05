@@ -31,6 +31,7 @@ def root():
             "/predictions",
             "/predictions/{container_id}",
             "/dashboard",
+            "/report",
             "/health",
         ],
     }
@@ -97,3 +98,12 @@ def get_dashboard():
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="No dashboard found. Run pipeline first.")
     return FileResponse(path, media_type='image/png')
+
+
+@app.get("/report")
+def get_report():
+    """Get the HTML summary report."""
+    path = 'outputs/summary_report.html'
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="No HTML report found. Run pipeline first.")
+    return FileResponse(path, media_type='text/html')

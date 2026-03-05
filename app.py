@@ -88,10 +88,16 @@ if run_btn:
 
     st.subheader("Dashboard")
     dashboard_path = 'outputs/summary_report.png'
+    html_report_path = 'outputs/summary_report.html'
     if os.path.exists(dashboard_path):
         st.image(dashboard_path, use_container_width=True)
     else:
         st.warning("Dashboard image not found at " + dashboard_path)
+
+    if os.path.exists(html_report_path):
+        with open(html_report_path, 'rb') as f:
+            html_data = f.read()
+        st.download_button("📄 Download HTML Report", html_data, "summary_report.html", "text/html")
 
     st.subheader("Top 10 Riskiest Containers")
     top10 = results.nlargest(10, 'Risk_Score')

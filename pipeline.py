@@ -90,7 +90,9 @@ def run_pipeline(hist_path=None, rt_path=None):
     print("[Step 8/8] Generating dashboard...")
     dashboard_df = test_feat.copy()
     dashboard_df['Container_ID'] = test_df['Container_ID'].values
-    generate_dashboard(dashboard_df)
+    png_path, html_path = generate_dashboard(dashboard_df)
+    print(f"  PNG:  {png_path}")
+    print(f"  HTML: {html_path}")
 
     print("")
     print("=" * 60)
