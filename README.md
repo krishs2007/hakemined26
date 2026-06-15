@@ -6,5 +6,5 @@
 
 **Stack:** XGBoost · Flask REST API · React · Docker · Scikit-Learn
 
-🚀 **Live Demo:** [iloveagents.vercel.app](https://iloveagents.vercel.app/) (Update this with real link)
+🚀 **Live Demo:** [sniffrproject.vercel.app](sniffrproject.vercel.app) 
 📚 **Read the [Technical Deep Dive](#model-design)** | 🐳 **[Quick Docker Start](#quick-start-docker)**
