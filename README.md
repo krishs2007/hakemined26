@@ -6,5 +6,5 @@
 
 **Stack:** XGBoost · Flask REST API · React · Docker · Scikit-Learn
 
-🚀 **Live Demo:** [sniffrproject.vercel.app](sniffrproject.vercel.app) 
+🚀 **Live Demo:** [sniffrproject.vercel.app](https://sniffrproject.vercel.app/) 
 
